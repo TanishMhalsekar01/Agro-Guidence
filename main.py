@@ -4,6 +4,7 @@ import os
 import requests
 import time
 from ctransformers import AutoModelForCausalLM
+from login_page import show_login_page
 
 DATA_FILE = "agro_data.json"
 MODEL_FILE = "tinyllama-1.1b-chat-v1.0.Q5_K_M.gguf" 
@@ -83,10 +84,25 @@ def load_data():
 def save_data(data):
     with open(DATA_FILE, "w") as f: json.dump(data, f, indent=4)
 
+# ── Authentication Gate ──────────────────────────────────────────────────────
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if not st.session_state.logged_in:
+    show_login_page()
+    st.stop()
+
+# ── Dashboard (only accessible after login) ───────────────────────────────────
 if 'agro_db' not in st.session_state:
     st.session_state.agro_db = load_data()
 
-st.title("🌾 Agro Guidance: Offline Expert & AI Advisor")
+user = st.session_state.get("current_user", {})
+st.title(f"🌾 Agro Guidance: Offline Expert & AI Advisor")
+st.markdown(
+    f"<p style='color:#6b7280;font-size:0.9rem;margin-top:-0.8rem;'>Welcome back, "
+    f"<b style='color:#4ade80'>{user.get('first_name', '')} {user.get('last_name', '')}</b> 👋</p>",
+    unsafe_allow_html=True,
+)
 
 db = st.session_state.agro_db
 col_s1, col_s2, col_s3 = st.columns(3)
@@ -131,6 +147,23 @@ with tab_ai:
 
 with st.sidebar:
     st.title("Settings")
+
+    # ── User info card ──
+    user = st.session_state.get("current_user", {})
+    if user:
+        st.markdown(
+            f"""
+            <div style='background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);
+                        border-radius:12px;padding:12px 14px;margin-bottom:12px;'>
+                <p style='margin:0;color:#4ade80;font-weight:600;font-size:0.95rem;'>
+                    👤 {user.get('first_name','')} {user.get('last_name','')}
+                </p>
+                <p style='margin:2px 0 0;color:#6b7280;font-size:0.78rem;'>@{user.get('username','')}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
     if st.button("🔄 Sync Global Data"):
         res = requests.get(REMOTE_URL)
         if res.status_code == 200:
@@ -138,3 +171,9 @@ with st.sidebar:
             st.session_state.agro_db = res.json()
             st.success("Database Updated!")
             st.rerun()
+
+    st.divider()
+    if st.button("🚪 Log Out", type="secondary"):
+        st.session_state.logged_in = False
+        st.session_state.current_user = None
+        st.rerun()
